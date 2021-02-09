@@ -24,3 +24,9 @@ Following features are included:
 * Grabbing asset balance which are higher than n
 * Grabbing all intervals into a list
 * Grabbing best n amount of symbols in last 24h
+
+Donate
+----
+If this helped you out, feel free to donate:
+
+BTC: 1EbfthASBSPiQDuZWp8xyT65rbb3fG9wBc
