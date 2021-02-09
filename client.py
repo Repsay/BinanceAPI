@@ -1,4 +1,9 @@
-import requests, hmac, hashlib, time, os, sys
+import requests
+import hmac
+import hashlib
+import time
+import os
+import sys
 import numpy as np
 
 from operator import itemgetter
@@ -7,12 +12,18 @@ import binance.helpers as bhelp
 from binance.exceptions import APIException, RequestException, WithdrawException
 
 class Client(object):
+    """
+    Data is returned in ascending order. Oldest first, newest last
+    time and timestamps related fields are in milliseconds
+    
+    """
 
     API_URL = "https://api.binance.{}/api"
     WITHDRAW_API_URL = "https://api.binance.{}/wapi"
     MARGIN_API_URL = "https://api.binance.{}/sapi"
     WEBSITE_URL = "https://www.binance.{}"
     FUTURES_URL = "https://fapi.binance.{}/fapi"
+    TEST_API_URL = "https://testnet.binance.vision/api"
     PUBLIC_API_VERSION = "v3"
     PRIVATE_API_VERSION = "v3"
     WITHDRAW_API_VERSION = "v3"
@@ -76,18 +87,11 @@ class Client(object):
 
     MAIN_PATH = ""
 
-    def __init__(self, api_key=None, api_secret=None, requests_params=None, tld="com"):
-        """Binance API Client constructor
-
-        :param api_key: API key
-        :type api_key: str
-        :param api_secret: API secret key
-        :type api_secret: str
-        :param request_params: optional - Dictornary of requests params to use for all calls
-        :type requests_params: dict
-
-        """
-        self.API_URL = self.API_URL.format(tld)
+    def __init__(self, api_key=None, api_secret=None, requests_params=None, tld="com", test=False):
+        if not test:
+            self.API_URL = self.API_URL.format(tld)
+        else:
+            self.API_URL = self.TEST_API_URL
         self.WITHDRAW_API_URL = self.WITHDRAW_API_URL.format(tld)
         self.MARGIN_API_URL = self.MARGIN_API_URL.format(tld)
         self.WEBSITE_URL = self.WEBSITE_URL.format(tld)
@@ -144,13 +148,6 @@ class Client(object):
         return m.hexdigest()
 
     def _order_params(self, data):
-        """Convert params to list with signature as last element
-
-            :param data: dictionary with the params
-            :type data: dict
-            :return: list
-
-        """
 
         has_signature = False
         params = []
@@ -170,23 +167,6 @@ class Client(object):
         return params
     
     def _request(self, method, uri, signed, force_params=False, **kwargs):
-
-        """Do the request by the API
-
-            :param method: type of getting data (get/post)
-            :type method: str
-            :param uri: url of the request
-            :type uri: str
-            :param signed: wether it needs a signature
-            :type signed: bool
-            :param force_params: #TODO
-            :type force_params: bool
-            :param kwargs: all params to send
-            :type kwargs: dict
-
-
-        """
-
 
         #set default requests timeout
         kwargs["timeout"] = 10
@@ -254,10 +234,6 @@ class Client(object):
         return self._request(method, uri, signed, True, **kwargs)
 
     def _handle_response(self):
-        """Internal helper for handling API responses from the Binance server.
-        Raises the appropriate exceptions when necessary; otherwise, returns the
-        response.
-        """
         if not str(self.response.status_code).startswith("2"):
             raise APIException(self.response)
         try:
@@ -276,120 +252,11 @@ class Client(object):
 
     def _delete(self, path, signed=False, version=PUBLIC_API_VERSION, **kwargs):
         return self._request_api("delete", path, signed, version, **kwargs)
-    
+
     def get_exchange_info(self):
-        """Return rate limits and list of symbols
-        
-        :returns: list - List of product dictionaries
-        
-        {
-        "timezone": "UTC",
-        "serverTime": 1565246363776,
-        "rateLimits": [
-            {
-                {
-                    "rateLimitType": "REQUEST_WEIGHT",
-                    "interval": "MINUTE",
-                    "intervalNum": 1,
-                    "limit": 1200
-                },
-                {
-                    "rateLimitType": "ORDERS",
-                    "interval": "SECOND",
-                    "intervalNum": 10,
-                    "limit": 100
-                },
-                {
-                    "rateLimitType": "ORDERS",
-                    "interval": "DAY",
-                    "intervalNum": 1,
-                    "limit": 200000
-                },
-                {
-                    "rateLimitType": "RAW_REQUESTS",
-                    "interval": "MINUTE",
-                    "intervalNum": 5,
-                    "limit": 5000
-                }
-            }
-        ],
-        "exchangeFilters": [
-            //These are the defined filters in the `Filters` section.
-            //All filters are optional.
-        ],
-        "symbols": [
-            {
-            "symbol": "ETHBTC",
-            "status": "TRADING",
-            "baseAsset": "ETH",
-            "baseAssetPrecision": 8,
-            "quoteAsset": "BTC",
-            "quotePrecision": 8,
-            "quoteAssetPrecision": 8,
-            "orderTypes": [
-                "LIMIT",
-                "LIMIT_MAKER",
-                "MARKET",
-                "STOP_LOSS",
-                "STOP_LOSS_LIMIT",
-                "TAKE_PROFIT",
-                "TAKE_PROFIT_LIMIT"
-            ],
-            "icebergAllowed": true,
-            "ocoAllowed": true,
-            "isSpotTradingAllowed": true,
-            "isMarginTradingAllowed": true,
-            "filters": [
-                //These are defined in the Filters section.
-                //All filters are optional
-            ],
-            "permissions": [
-                "SPOT",
-                "MARGIN"
-            ]
-            }
-        ]
-        }"""
-
-
         return self._get("exchangeInfo")
 
     def get_pair_info(self, symbol):
-        """Return information about a pair
-        
-        :param symbol: required e.g. ETHBTC
-        :type symbol: str
-
-        :returns: Dict or None
-
-
-        {
-            "symbol": "ETHBTC",
-            "status": "TRADING",
-            "baseAsset": "ETH",
-            "baseAssetPrecision": 8,
-            "quoteAsset": "BTC",
-            "quotePrecision": 8,
-            "orderTypes": ["LIMIT", "MARKET"],
-            "icebergAllowed": false,
-            "filters": [
-                {
-                    "filterType": "PRICE_FILTER",
-                    "minPrice": "0.00000100",
-                    "maxPrice": "100000.00000000",
-                    "tickSize": "0.00000100"
-                }, {
-                    "filterType": "LOT_SIZE",
-                    "minQty": "0.00100000",
-                    "maxQty": "100000.00000000",
-                    "stepSize": "0.00100000"
-                }, {
-                    "filterType": "MIN_NOTIONAL",
-                    "minNotional": "0.00100000"
-                }
-            ]
-        }"""
-
         result = self.get_exchange_info()
 
         for item in result["symbols"]:
@@ -405,110 +272,24 @@ class Client(object):
         return self._get("time")
     
     def get_all_tickers(self):
-        """[
-        {
-            "symbol": "LTCBTC",
-            "price": "4.00000200"
-        },
-        {
-            "symbol": "ETHBTC",
-            "price": "0.07946600"
-        }
-        ]"""
-
         return self._get("ticker/price")
 
     def get_orderbook_tickers(self):
-        """[
-        {
-            "symbol": "LTCBTC",
-            "bidPrice": "4.00000000",
-            "bidQty": "431.00000000",
-            "askPrice": "4.00000200",
-            "askQty": "9.00000000"
-        },
-        {
-            "symbol": "ETHBTC",
-            "bidPrice": "0.07946700",
-            "bidQty": "9.00000000",
-            "askPrice": "100000.00000000",
-            "askQty": "1000.00000000"
-        }
-        ]"""
-
         return self._get("ticker/bookTicker")
     
     def get_orderbook(self, **params):
-        """{
-        "lastUpdateId": 1027024,
-        "bids": [
-            [
-            "4.00000000",     // PRICE
-            "431.00000000"    // QTY
-            ]
-        ],
-        "asks": [
-            [
-            "4.00000200",
-            "12.00000000"
-            ]
-        ]
-        }"""
-
         return self._get("depth", data=params)
 
     def get_recent_trades(self, **params):
-        """[
-        {
-            "id": 28457,
-            "price": "4.00000100",
-            "qty": "12.00000000",
-            "quoteQty": "48.000012",
-            "time": 1499865549590,
-            "isBuyerMaker": true,
-            "isBestMatch": true
-        }
-        ]"""
-
         return self._get("trades", data=params)
 
     def get_historical_trades(self, **params):
-        """[
-        {
-            "id": 28457,
-            "price": "4.00000100",
-            "qty": "12.00000000",
-            "quoteQty": "48.000012",
-            "time": 1499865549590, // Trade executed timestamp, as same as `T` in the stream
-            "isBuyerMaker": true,
-            "isBestMatch": true
-        }
-        ]"""
-
         return self._get("historicalTrades", data=params)
     
     def get_aggregate_trades(self, **params):
-        """[
-        {
-            "a": 26129,         // Aggregate tradeId
-            "p": "0.01633102",  // Price
-            "q": "4.70443515",  // Quantity
-            "f": 27781,         // First tradeId
-            "l": 27781,         // Last tradeId
-            "T": 1498793709153, // Timestamp
-            "m": true,          // Was the buyer the maker?
-            "M": true           // Was the trade the best price match?
-        }
-        ]"""
-
         return self._get("aggTrades", data=params)
 
     def aggregate_trade_iter(self, symbol, start_str=None, last_id=None):
-        """
-        :returns: an iterator of JSON objects, one per trade. The format of
-        each object is identical to Client.aggregate_trades().
-        """
-
         #You can only specify one of the two
         if start_str is not None and last_id is not None:
             raise ValueError(
@@ -563,23 +344,6 @@ class Client(object):
             params["fromId"] = trades[-1][self.AGG_ID]
 
     def get_candles(self, **params):
-        """[
-        [
-            1499040000000,      // Open time
-            "0.01634790",       // Open
-            "0.80000000",       // High
-            "0.01575800",       // Low
-            "0.01577100",       // Close
-            "148976.11427815",  // Volume
-            1499644799999,      // Close time
-            "2434.19055334",    // Quote asset volume
-            308,                // Number of trades
-            "1756.87402397",    // Taker buy base asset volume
-            "28.46694368",      // Taker buy quote asset volume
-            "17928899.62484339" // Ignore.
-        ]
-        ]"""
-
         return self._get("klines", data=params)
 
     def _get_earliest_valid_timestamp(self, symbol, interval=KLINE_INTERVAL_15MINUTE):
@@ -692,109 +456,20 @@ class Client(object):
                 break
 
             params["startTime"] += timeframe
-
-            
+           
     def get_avg_price(self, **params):
-        """{
-        "mins": 5,
-        "price": "9.35751834"
-        }"""
-
         return self._get("avgPrice", data=params)
     
     def get_ticker(self, **params):
-        """{
-        "symbol": "BNBBTC",
-        "priceChange": "-94.99999800",
-        "priceChangePercent": "-95.960",
-        "weightedAvgPrice": "0.29628482",
-        "prevClosePrice": "0.10002000",
-        "lastPrice": "4.00000200",
-        "lastQty": "200.00000000",
-        "bidPrice": "4.00000000",
-        "askPrice": "4.00000200",
-        "openPrice": "99.00000000",
-        "highPrice": "100.00000000",
-        "lowPrice": "0.10000000",
-        "volume": "8913.30000000",
-        "quoteVolume": "15.30000000",
-        "openTime": 1499783499040,
-        "closeTime": 1499869899040,
-        "firstId": 28385,   // First tradeId
-        "lastId": 28460,    // Last tradeId
-        "count": 76         // Trade count
-        }"""
-
         return self._get("ticker/24hr", data=params)
     
     def get_symbol_ticker(self, **params):
-        """{
-        "symbol": "LTCBTC",
-        "price": "4.00000200"
-        }"""
-
         return self._get("ticker/price", data=params)
 
     def get_orderbook_ticker(self, **params):
-        """{
-        "symbol": "LTCBTC",
-        "bidPrice": "4.00000000",
-        "bidQty": "431.00000000",
-        "askPrice": "4.00000200",
-        "askQty": "9.00000000"
-        }"""
-
         return self._get("ticker/bookTicker", data=params)
 
     def create_order(self, **params):
-        """{
-        "symbol": "BTCUSDT",
-        "orderId": 28,
-        "orderListId": -1, //Unless OCO, value will be -1
-        "clientOrderId": "6gCrw2kRUAF9CvJDGP16IP",
-        "transactTime": 1507725176595,
-        "price": "0.00000000",
-        "origQty": "10.00000000",
-        "executedQty": "10.00000000",
-        "cummulativeQuoteQty": "10.00000000",
-        "status": "FILLED",
-        "timeInForce": "GTC",
-        "type": "MARKET",
-        "side": "SELL",
-        "fills": [
-            {
-            "price": "4000.00000000",
-            "qty": "1.00000000",
-            "commission": "4.00000000",
-            "commissionAsset": "USDT"
-            },
-            {
-            "price": "3999.00000000",
-            "qty": "5.00000000",
-            "commission": "19.99500000",
-            "commissionAsset": "USDT"
-            },
-            {
-            "price": "3998.00000000",
-            "qty": "2.00000000",
-            "commission": "7.99600000",
-            "commissionAsset": "USDT"
-            },
-            {
-            "price": "3997.00000000",
-            "qty": "1.00000000",
-            "commission": "3.99700000",
-            "commissionAsset": "USDT"
-            },
-            {
-            "price": "3995.00000000",
-            "qty": "1.00000000",
-            "commission": "3.99500000",
-            "commissionAsset": "USDT"
-            }
-        ]
-        }"""
-
         return self._post("order", True, data=params)
 
     def order_limit(self, timeInForce=TIME_IN_FORCE_GTC, **params):
@@ -861,233 +536,24 @@ class Client(object):
         return self._post("order/test", True, data=params)
 
     def get_order(self, **params):
-        """{
-        "symbol": "LTCBTC",
-        "orderId": 1,
-        "orderListId": -1, //Unless OCO, value will be -1
-        "clientOrderId": "myOrder1",
-        "price": "0.1",
-        "origQty": "1.0",
-        "executedQty": "0.0",
-        "cummulativeQuoteQty": "0.0",
-        "status": "NEW",
-        "timeInForce": "GTC",
-        "type": "LIMIT",
-        "side": "BUY",
-        "stopPrice": "0.0",
-        "icebergQty": "0.0",
-        "time": 1499827319559,
-        "updateTime": 1499827319559,
-        "isWorking": true,
-        "origQuoteOrderQty": "0.000000"
-        }"""
-
         return self._get("order", True, data=params)
     
     def get_all_orders(self, **params):
-        """[
-        {
-            "symbol": "LTCBTC",
-            "orderId": 1,
-            "orderListId": -1, //Unless OCO, the value will always be -1
-            "clientOrderId": "myOrder1",
-            "price": "0.1",
-            "origQty": "1.0",
-            "executedQty": "0.0",
-            "cummulativeQuoteQty": "0.0",
-            "status": "NEW",
-            "timeInForce": "GTC",
-            "type": "LIMIT",
-            "side": "BUY",
-            "stopPrice": "0.0",
-            "icebergQty": "0.0",
-            "time": 1499827319559,
-            "updateTime": 1499827319559,
-            "isWorking": true,
-            "origQuoteOrderQty": "0.000000"
-        }
-        ]"""
-
         return self._get("allOrders", True, data=params)
 
     def cancel_order(self, **params):
-        """{
-        "symbol": "LTCBTC",
-        "origClientOrderId": "myOrder1",
-        "orderId": 4,
-        "orderListId": -1, //Unless part of an OCO, the value will always be -1.
-        "clientOrderId": "cancelMyOrder1",
-        "price": "2.00000000",
-        "origQty": "1.00000000",
-        "executedQty": "0.00000000",
-        "cummulativeQuoteQty": "0.00000000",
-        "status": "CANCELED",
-        "timeInForce": "GTC",
-        "type": "LIMIT",
-        "side": "BUY"
-        }"""
-
         return self._delete("order", True, data=params)
     
     def cancel_all_orders_symbol(self, **params):
-        """[
-        {
-            "symbol": "BTCUSDT",
-            "origClientOrderId": "E6APeyTJvkMvLMYMqu1KQ4",
-            "orderId": 11,
-            "orderListId": -1,
-            "clientOrderId": "pXLV6Hz6mprAcVYpVMTGgx",
-            "price": "0.089853",
-            "origQty": "0.178622",
-            "executedQty": "0.000000",
-            "cummulativeQuoteQty": "0.000000",
-            "status": "CANCELED",
-            "timeInForce": "GTC",
-            "type": "LIMIT",
-            "side": "BUY"
-        },
-        {
-            "symbol": "BTCUSDT",
-            "origClientOrderId": "A3EF2HCwxgZPFMrfwbgrhv",
-            "orderId": 13,
-            "orderListId": -1,
-            "clientOrderId": "pXLV6Hz6mprAcVYpVMTGgx",
-            "price": "0.090430",
-            "origQty": "0.178622",
-            "executedQty": "0.000000",
-            "cummulativeQuoteQty": "0.000000",
-            "status": "CANCELED",
-            "timeInForce": "GTC",
-            "type": "LIMIT",
-            "side": "BUY"
-        },
-        {
-            "orderListId": 1929,
-            "contingencyType": "OCO",
-            "listStatusType": "ALL_DONE",
-            "listOrderStatus": "ALL_DONE",
-            "listClientOrderId": "2inzWQdDvZLHbbAmAozX2N",
-            "transactionTime": 1585230948299,
-            "symbol": "BTCUSDT",
-            "orders": [
-            {
-                "symbol": "BTCUSDT",
-                "orderId": 20,
-                "clientOrderId": "CwOOIPHSmYywx6jZX77TdL"
-            },
-            {
-                "symbol": "BTCUSDT",
-                "orderId": 21,
-                "clientOrderId": "461cPg51vQjV3zIMOXNz39"
-            }
-            ],
-            "orderReports": [
-            {
-                "symbol": "BTCUSDT",
-                "origClientOrderId": "CwOOIPHSmYywx6jZX77TdL",
-                "orderId": 20,
-                "orderListId": 1929,
-                "clientOrderId": "pXLV6Hz6mprAcVYpVMTGgx",
-                "price": "0.668611",
-                "origQty": "0.690354",
-                "executedQty": "0.000000",
-                "cummulativeQuoteQty": "0.000000",
-                "status": "CANCELED",
-                "timeInForce": "GTC",
-                "type": "STOP_LOSS_LIMIT",
-                "side": "BUY",
-                "stopPrice": "0.378131",
-                "icebergQty": "0.017083"
-            },
-            {
-                "symbol": "BTCUSDT",
-                "origClientOrderId": "461cPg51vQjV3zIMOXNz39",
-                "orderId": 21,
-                "orderListId": 1929,
-                "clientOrderId": "pXLV6Hz6mprAcVYpVMTGgx",
-                "price": "0.008791",
-                "origQty": "0.690354",
-                "executedQty": "0.000000",
-                "cummulativeQuoteQty": "0.000000",
-                "status": "CANCELED",
-                "timeInForce": "GTC",
-                "type": "LIMIT_MAKER",
-                "side": "BUY",
-                "icebergQty": "0.639962"
-            }
-            ]
-        }
-        ]"""
-
         return self._delete("openOrders", True, data=params)
     
     def get_open_orders(self, **params):
-        """[
-        {
-            "symbol": "LTCBTC",
-            "orderId": 1,
-            "orderListId": -1, //Unless OCO, the value will always be -1
-            "clientOrderId": "myOrder1",
-            "price": "0.1",
-            "origQty": "1.0",
-            "executedQty": "0.0",
-            "cummulativeQuoteQty": "0.0",
-            "status": "NEW",
-            "timeInForce": "GTC",
-            "type": "LIMIT",
-            "side": "BUY",
-            "stopPrice": "0.0",
-            "icebergQty": "0.0",
-            "time": 1499827319559,
-            "updateTime": 1499827319559,
-            "isWorking": true,
-            "origQuoteOrderQty": "0.000000"
-        }
-        ]"""
-
         return self._get("openOrders", True, data=params)
 
     def get_account(self, **params):
-        """
-        
-        No parameters required
-
-        {
-        "makerCommission": 15,
-        "takerCommission": 15,
-        "buyerCommission": 0,
-        "sellerCommission": 0,
-        "canTrade": true,
-        "canWithdraw": true,
-        "canDeposit": true,
-        "updateTime": 123456789,
-        "accountType": "SPOT",
-        "balances": [
-            {
-            "asset": "BTC",
-            "free": "4723846.89208129",
-            "locked": "0.00000000"
-            },
-            {
-            "asset": "LTC",
-            "free": "4763368.68006011",
-            "locked": "0.00000000"
-            }
-        ],
-        "permissions": [
-            "SPOT"
-        ]
-        }"""
-
         return self._get("account", True, data=params)
     
     def get_asset_balance(self, asset, **params):
-        """{
-        "asset": "BTC",
-        "free": "4723846.89208129",
-        "locked": "0.00000000"
-        }"""
-
         result = self.get_account(**params)
 
         if "balances" in result:
@@ -1098,102 +564,15 @@ class Client(object):
         return None
 
     def get_my_trades(self, **params):
-        """[
-        {
-            "symbol": "BNBBTC",
-            "id": 28457,
-            "orderId": 100234,
-            "orderListId": -1, //Unless OCO, the value will always be -1
-            "price": "4.00000100",
-            "qty": "12.00000000",
-            "quoteQty": "48.000012",
-            "commission": "10.10000000",
-            "commissionAsset": "BNB",
-            "time": 1499865549590,
-            "isBuyer": true,
-            "isMaker": false,
-            "isBestMatch": true
-        }
-        ]"""
-
         return self._get("myTrades", True, data=params)
 
     def get_account_status(self, **params):
-        """{
-            "msg": "Order failed:Low Order fill rate! Will be reactivated after 5 minutes.",
-            "success": true,
-            "objs": [
-                "5"
-            ]
-        }"""
-
         result = self._request_withdraw_api("get", "accountStatus.html", True, data=params)
         if not result["success"]:
             raise WithdrawException(result["msg"])
         return result
 
     def get_dust_log(self, **params):
-        """{
-            "success": true, 
-            "results": {
-                "total": 2,   //Total counts of exchange
-                "rows": [
-                    {
-                        "transfered_total": "0.00132256",//Total transfered BNB amount for this exchange.
-                        "service_charge_total": "0.00002699",   //Total service charge amount for this exchange.
-                        "tran_id": 4359321,
-                        "logs": [           //Details of  this exchange.
-                            {
-                                "tranId": 4359321,
-                                "serviceChargeAmount": "0.000009",
-                                "uid": "10000015",
-                                "amount": "0.0009",
-                                "operateTime": "2018-05-03 17:07:04",
-                                "transferedAmount": "0.000441",
-                                "fromAsset": "USDT"
-                            },
-                            {
-                                "tranId": 4359321,
-                                "serviceChargeAmount": "0.00001799",
-                                "uid": "10000015",
-                                "amount": "0.0009",
-                                "operateTime": "2018-05-03 17:07:04",
-                                "transferedAmount": "0.00088156",
-                                "fromAsset": "ETH"
-                            }
-                        ],
-                        "operate_time": "2018-05-03 17:07:04" //The time of this exchange.
-                    },
-                    {
-                        "transfered_total": "0.00058795",
-                        "service_charge_total": "0.000012",
-                        "tran_id": 4357015,
-                        "logs": [       // Details of  this exchange.
-                            {
-                                "tranId": 4357015,
-                                "serviceChargeAmount": "0.00001",
-                                "uid": "10000015",
-                                "amount": "0.001",
-                                "operateTime": "2018-05-02 13:52:24",
-                                "transferedAmount": "0.00049",
-                                "fromAsset": "USDT"
-                            },
-                            {
-                                "tranId": 4357015,
-                                "serviceChargeAmount": "0.000002",
-                                "uid": "10000015",
-                                "amount": "0.0001",
-                                "operateTime": "2018-05-02 13:51:11",
-                                "transferedAmount": "0.00009795",
-                                "fromAsset": "ETH"
-                            }
-                        ],
-                        "operate_time": "2018-05-02 13:51:11"
-                    }
-                ]
-            }
-        }"""
-
         result = self._request_withdraw_api("get", "userAssetDribbletLog.html", True, data=params)
 
         if not result["succes"]:
@@ -1201,116 +580,24 @@ class Client(object):
         return result
     
     def transfer_dust(self, **params):
-        """{
-            "totalServiceCharge":"0.02102542",
-            "totalTransfered":"1.05127099",
-            "transferResult":[
-                {
-                    "amount":"0.03000000",
-                    "fromAsset":"ETH",
-                    "operateTime":1563368549307,
-                    "serviceChargeAmount":"0.00500000",
-                    "tranId":2970932918,
-                    "transferedAmount":"0.25000000"
-                },
-                {
-                    "amount":"0.09000000",
-                    "fromAsset":"LTC",
-                    "operateTime":1563368549404,
-                    "serviceChargeAmount":"0.01548000",
-                    "tranId":2970932918,
-                    "transferedAmount":"0.77400000"
-                },
-                {
-                    "amount":"248.61878453",
-                    "fromAsset":"TRX",
-                    "operateTime":1563368549489,
-                    "serviceChargeAmount":"0.00054542",
-                    "tranId":2970932918,
-                    "transferedAmount":"0.02727099"
-                }
-            ]
-        }"""
-
         return self._request_margin_api("post", "asset/dust", True, data=params)
 
     def get_asset_dividend_history(self, **params):
-        """{
-            "rows":[
-                {
-                    "amount":"10.00000000",
-                    "asset":"BHFT",
-                    "divTime":1563189166000,
-                    "enInfo":"BHFT distribution",
-                    "tranId":2968885920
-                },
-                {
-                    "amount":"10.00000000",
-                    "asset":"BHFT",
-                    "divTime":1563189165000,
-                    "enInfo":"BHFT distribution",
-                    "tranId":2968885920
-                }
-            ],
-            "total":2
-        }"""
-
         return self._request_margin_api("get", "asset/assetDividend", True, data=params)
 
     def get_trade_fee(self, **params):
-        """{
-            "tradeFee": [
-            {
-            "symbol": "ADABNB",
-            "maker": 0.9000,
-            "taker": 1.0000
-            },
-            {
-            "symbol": "BNBBTC",
-            "maker": 0.3000,
-            "taker": 0.3000
-            }
-        ],
-            "success": true
-        }"""
-
         result = self._request_withdraw_api("get", "tradeFee.html", True, data=params)
         if not result["success"]:
             raise WithdrawException(result["msg"])
         return result
     
     def get_asset_details(self, **params):
-        """{
-            "success": true,
-            "assetDetail": {
-                "CTR": {
-                    "minWithdrawAmount": "70.00000000", //min withdraw amount
-                    "depositStatus": false,//deposit status (false if ALL of networks' are false)
-                    "withdrawFee": 35, // withdraw fee
-                    "withdrawStatus": true, //withdraw status (false if ALL of networks' are false)
-                    "depositTip": "Delisted, Deposit Suspended" //reason
-                },
-                "SKY": {
-                    "minWithdrawAmount": "0.02000000",
-                    "depositStatus": true,
-                    "withdrawFee": 0.01,
-                    "withdrawStatus": true
-                }   
-            }
-        }"""
-
         result = self._request_withdraw_api("get", "assetDetail.html", True, data=params)
         if not result["success"]:
             raise WithdrawException(result["msg"])
         return result
 
     def withdraw(self, **params):
-        """{
-            "msg": "success",
-            "success": true,
-            "id":"7213fea8e94b4a5593d507237e5a555b"
-        }"""
-
         if "asset" in params and "name" not in params:
             params["name"] = params["asset"]
         
@@ -1321,75 +608,12 @@ class Client(object):
         return result
 
     def get_deposit_history(self, **params):
-        """[
-            {
-                "amount":"0.00999800",
-                "coin":"PAXG",
-                "network":"ETH",
-                "status":1,
-                "address":"0x788cabe9236ce061e5a892e1a59395a81fc8d62c",
-                "addressTag":"",
-                "txId":"0xaad4654a3234aa6118af9b4b335f5ae81c360b2394721c019b5d1e75328b09f3",
-                "insertTime":1599621997000,
-                "transferType":0,
-                "confirmTimes":"12/12"
-            },
-            {
-                "amount":"0.50000000",
-                "coin":"IOTA",
-                "network":"IOTA",
-                "status":1,
-                "address":"SIZ9VLMHWATXKV99LH99CIGFJFUMLEHGWVZVNNZXRJJVWBPHYWPPBOSDORZ9EQSHCZAMPVAPGFYQAUUV9DROOXJLNW",
-                "addressTag":"",
-                "txId":"ESBFVQUTPIWQNJSPXFNHNYHSQNTGKRVKPRABQWTAXCDWOAKDKYWPTVG9BGXNVNKTLEJGESAVXIKIZ9999",
-                "insertTime":1599620082000,
-                "transferType":0,
-                "confirmTimes":"1/1"
-            }
-        ]"""
-
         return self._request_withdraw_api("get", "depositHistory.html", True, data=params)
 
     def get_withdraw_history(self, **params):
-        """{
-            "withdrawList": [
-                {
-                    "id":"7213fea8e94b4a5593d507237e5a555b",
-                    "withdrawOrderId": None,    
-                    "amount": 0.99,
-                    "transactionFee": 0.01,
-                    "address": "0x6915f16f8791d0a1cc2bf47c13a6b2a92000504b",
-                    "asset": "ETH",
-                    "txId": "0xdf33b22bdb2b28b1f75ccd201a4a4m6e7g83jy5fc5d5a9d1340961598cfcb0a1",
-                    "applyTime": 1508198532000,
-                    "status": 4
-                },
-                {
-                    "id":"7213fea8e94b4a5534ggsd237e5a555b",
-                    "withdrawOrderId": "withdrawtest", 
-                    "amount": 999.9999,
-                    "transactionFee": 0.0001,
-                    "address": "463tWEBn5XZJSxLU34r6g7h8jtxuNcDbjLSjkn3XAXHCbLrTTErJrBWYgHJQyrCwkNgYvyV3z8zctJLPCZy24jvb3NiTcTJ",
-                    "addressTag": "342341222",
-                    "txId": "b3c6219639c8ae3f9cf010cdc24fw7f7yt8j1e063f9b4bd1a05cb44c4b6e2509",
-                    "asset": "XMR",
-                    "applyTime": 1508198532000,
-                    "status": 4
-                }
-            ],
-            "success": true
-        }"""
-
         return self._request_withdraw_api("get", "withdrawHistory.html", True, data=params)
 
     def get_deposit_address(self, **params):
-        """{
-            "address": "0x6915f16f8791d0a1cc2bf47c13a6b2a92000504b",
-            "success": true,
-            "addressTag": "1231212",
-            "asset": "BNB"
-        }"""
-
         return self._request_withdraw_api("get", "depositAddress.html", True, data=params)
     
     def stream_get_listen_key(self):
@@ -1397,8 +621,6 @@ class Client(object):
         return result["listenKey"]
     
     def stream_keepalive(self, listenKey):
-        """{}"""
-
         params = {
             "listenKey": listenKey
         }
@@ -1406,8 +628,6 @@ class Client(object):
         return self._put("userDataStream", False, data=params)
     
     def stream_close(self, listenKey):
-        """{}"""
-
         params = {
             "listenKey": listenKey
         }
