@@ -794,6 +794,34 @@ class Client(object):
         return self.create_oco_order(**params)
     
     def create_test_order(self, **params):
+        """Test new order creation and signature/recvWindow long. Creates and validates a new order but does not send it into the matching engine.
+        :params: {
+            "symbol": str,
+            "side": enum,
+            "type": enum,
+            "timeInForce": enum,            #Optional
+            "quantity": decimal,            #Optional
+            "quoteOrderQty": decimal,       #Optional
+            "price": decimal,               #Optional
+            "newClientOrderId": str,        #Optional   #unique id open orders - automatically generated if not sent - Same newClientOrderId can be accepted only when the previous one is filled, otherwise rejected
+            "stopPrice": decimal,           #Optional
+            "icebergQty": decimal,          #Optional   #When icebergQty sent timeInForce set to GTC
+            "newOrderRespType": enum,       #Optional   #Set response - MARKET and LIMIT Default: FULL other Default: ACK
+            "recvWindow": long,             #Optional   #Max: 60000
+            "timestamp": long
+        }
+
+        Additional mandatory parameters based on type:
+        LIMIT:              timeInForce - quantity - price
+        MARKET:             quantity or quoteOrderQty
+        STOP_LOSS:          quantity - stopPrice
+        STOP_LOSS_LIMIT:    timeInForce - quantity - price - stopPrice
+        TAKE_PROFIT:        quantity - stopPrice
+        TAKE_PROFIT_LIMIT:  timeInForce - quantity - price - stopPrice
+        LIMIT_MAKER:        quantity - price
+
+        :returns: dict -> {}
+        """
         return self._post("order/test", True, data=params)
 
     def get_order(self, **params):
