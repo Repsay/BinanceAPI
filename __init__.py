@@ -28,3 +28,4 @@ from .functions import updateAllEMA
 from .functions import updateMA
 from .functions import updateAllMA
 from .functions import get_all_intervals
+from .functions import get_pair_info

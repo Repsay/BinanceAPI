@@ -30,6 +30,14 @@ class Client(object):
     MARGIN_API_VERSION = "v1"
     FUTURES_API_VERSION = "v1"
 
+    SYMBOL_STATUS_PRE_TRADING = "PRE_TRADING"
+    SYMBOL_STATUS_TRADING = "TRADING"
+    SYMBOL_STATUS_POST_TRADING = "POST_TRADING"
+    SYMBOL_STATUS_END_OF_DAY = "END_OF_DAY"
+    SYMBOL_STATUS_HALT = "HALT"
+    SYMBOL_STATUS_AUCTION_MATCH = "AUCTION_MATCH"
+    SYMBOL_STATUS_BREAK = "BREAK"
+
     SYMBOL_TYPE_SPOT = "SPOT"
 
     ORDER_STATUS_NEW = "NEW"
@@ -39,6 +47,14 @@ class Client(object):
     ORDER_STATUS_PENDING_CANCEL = "PENDING_CANCEL"
     ORDER_STATUS_REJECTED = "REJECTED"
     ORDER_STATUS_EXPIRED = "EXPIRED"
+
+    OCO_STATUS_RESPONSE = "RESPONSE"
+    OCO_STATUS_EXEC_STARTED = "EXEC_STARTED"
+    OCO_STATUS_ALL_DONE = "ALL_DONE"
+    OCO_STATUS_EXECUTING = "EXECUTING"
+    OCO_STATUS_REJECT = "REJECT"
+
+    CONTINGENCY_TYPE_OCO = "OCO"
 
     KLINE_INTERVAL_1MINUTE = "1m"
     KLINE_INTERVAL_3MINUTE = "3m"
@@ -61,11 +77,11 @@ class Client(object):
 
     ORDER_TYPE_LIMIT = "LIMIT"
     ORDER_TYPE_MARKET = "MARKET"
-    ORDER_TYPE_STOP_LOSS = "STOP_LOSS"
+    ORDER_TYPE_STOP_LOSS = "STOP_LOSS"                  #MARKET order when the stopPrice is reached
     ORDER_TYPE_STOP_LOSS_LIMIT = "STOP_LOSS_LIMIT"
-    ORDER_TYPE_TAKE_PROFIT = "TAKE_PROFIT"
+    ORDER_TYPE_TAKE_PROFIT = "TAKE_PROFIT"              #MARKET order when the stopPrice is reached
     ORDER_TYPE_TAKE_PROFIT_LIMIT = "TAKE_PROFIT_LIMIT"
-    ORDER_TYPE_LIMIT_MAKER = "LIMIT_MAKER"
+    ORDER_TYPE_LIMIT_MAKER = "LIMIT_MAKER"              #LIMIT order that will be rejected if immediately matched and trade as a taker
 
     TIME_IN_FORCE_GTC = "GTC"  # Good till cancelled
     TIME_IN_FORCE_IOC = "IOC"  # Immediate or cancel
@@ -74,6 +90,14 @@ class Client(object):
     ORDER_RESP_TYPE_ACK = "ACK"
     ORDER_RESP_TYPE_RESULT = "RESULT"
     ORDER_RESP_TYPE_FULL = "FULL"
+
+    RATE_LIMIT_REQUEST_WEIGHT = "REQUEST_WEIGHT"
+    RATE_LIMIT_ORDERS = "ORDERS"
+    RATE_LIMIT_RAW_REQUEST = "RAW_REQUESTS"
+
+    RATE_LIMIT_INTERVAL_SECONDS = "SECOND"
+    RATE_LIMIT_INTERVAL_MINUTES = "MINUTE"
+    RATE_LIMIT_INTERVAL_DAYS = "DAY"
 
     # For accessing the data returned by Client.aggregate_trades().
     AGG_ID = "a"
@@ -254,21 +278,47 @@ class Client(object):
         return self._request_api("delete", path, signed, version, **kwargs)
 
     def get_exchange_info(self):
+        """Current exchange trading rules and symbol information
+        :params: None
+        :returns: dict -> {
+            "timezone": str,
+            "serverTime": int,
+            "rateLimits": lst -> [dict -> {"rateLimitType": str, "interval": str, "intervalNum": int, "limit": int}],    #for all different rateLimitTypes
+            "exchangeFilters": lst -> [#each filter has its own format],
+            "symbols": lst -> [dict -> {
+                "symbol": str,
+                "status": str,
+                "baseAsset": str,
+                "baseAssetPrecision": int,
+                "quoteAsset": str,
+                "quotePrecision": int,
+                "quoteAssetPrecision": int,
+                "orderTypes": lst -> [str],
+                "icebergAllowed": bool,
+                "ocoAllowed": bool,
+                "isSpotTradingAllowed": bool,
+                "isMarginTradingAllowed": bool,
+                "filters": lst -> [#each filter has its own format],
+                "permissions": lst -> [str]
+            }]
+        }
+        """
         return self._get("exchangeInfo")
-
-    def get_pair_info(self, symbol):
-        result = self.get_exchange_info()
-
-        for item in result["symbols"]:
-            if item["symbol"] == symbol.upper():
-                return item
-        
-        return None
     
     def ping(self):
+        """Test connectivity to the Rest API
+        :params: None
+        :returns: dict -> {}
+        """
         return self._get("ping")
     
     def get_server_time(self):
+        """Test connectivity to the Rest API and get the current server time.
+        :params: None
+        :returns: dict -> {
+            "serverTime": int
+        }
+        """
         return self._get("time")
     
     def get_all_tickers(self):
@@ -278,15 +328,76 @@ class Client(object):
         return self._get("ticker/bookTicker")
     
     def get_orderbook(self, **params):
+        """Current order book
+        :params: dict -> {
+            "symbol": str,
+            "limit": int    #Optional - Default: 100 - Valid: [5, 10, 20, 50, 100, 500, 1000, 5000]
+        }
+        :returns: dict -> {
+            "lastUpdateId": int,
+            "bids": lst -> [lst -> [str]],  #Price, Quantity
+            "asks": lst -> [lst -> [str]]   #Price, Quantity
+        }
+        """
         return self._get("depth", data=params)
 
     def get_recent_trades(self, **params):
+        """Recent trades
+        :params: {
+            "symbol": str,
+            "limit": int    #Optional - Default: 500 - Max: 1000
+        }
+        :returns: lst -> [dict -> {
+            "id": int,
+            "price": str,
+            "qty": str,
+            "quoteQty": str,
+            "time": int,
+            "isBuyerMaker": bool,
+            "isBestMatch": bool
+        }]
+        """
         return self._get("trades", data=params)
 
     def get_historical_trades(self, **params):
+        """Older market trades
+        :params: {
+            "symbol": str,
+            "limit": int,   #Optional - Default: 500 - Max: 1000
+            "fromId": long  #Optional - Default: most recent trades
+        }
+        :returns: lst -> [dict -> {
+            "id": int,
+            "price": str,
+            "qty": str,
+            "quoteQty": str,
+            "time": int,
+            "isBuyerMaker": bool,
+            "isBestMatch": bool
+        }]
+        """
         return self._get("historicalTrades", data=params)
     
     def get_aggregate_trades(self, **params):
+        """Get compressed, aggregate trades. Trades that fill at the time, from the same order, with the same price will have the quantity aggregated.
+        :params: {                  #When both startTime and endTime are sent time between start and end must be less than 1 hour. When neither fromId, startTime or endTime is sent most recent aggregate trades returned.
+            "symbol": str,
+            "fromId": long,     #Optional - INCLUSIVE
+            "startTime": long,  #Optional - INCLUSIVE
+            "endTime": long,    #Optional - INCLUSIVE
+            "limit": int        #Optional - Default: 500 - Max: 1000
+        }
+        :returns: lst -> [dict -> {
+            "a": int,   #Aggregate tradeId
+            "p": str,   #Price
+            "q": str,   #Quantity
+            "f": int,   #First tradeId
+            "l": int,   #Last tradeId
+            "T": int,   #Timestamp
+            "m": bool,  #was maker?
+            "M": bool   #was best match?
+        }]
+        """
         return self._get("aggTrades", data=params)
 
     def aggregate_trade_iter(self, symbol, start_str=None, last_id=None):
@@ -344,6 +455,29 @@ class Client(object):
             params["fromId"] = trades[-1][self.AGG_ID]
 
     def get_candles(self, **params):
+        """Kline/candlestick bars for a symbol. Klines are uniquely identified by their open time.
+        :params: {              #Neither startTime or endTime most recent returned
+            "symbol": str,
+            "interval": enum,
+            "startTime": long,  #Optional - INCLUSIVE? #TODO
+            "endTime": long,    #Optional - INCLUSIVE? #TODO
+            "limit": int        #Optional - Default: 500 - Max: 1000
+        }
+        :returns: lst -> [lst -> [
+            int,    #Open time
+            str,    #Open price
+            str,    #High price
+            str,    #Low price
+            str,    #Close price
+            str,    #Volume
+            int,    #Close time
+            str,    #Quote asset volume
+            int,    #Number of trades
+            str,    #Taker buy base asset volume
+            str,    #Taker buy quote asset volume
+            str     #IGNORE
+        ]]
+        """
         return self._get("klines", data=params)
 
     def _get_earliest_valid_timestamp(self, symbol, interval=KLINE_INTERVAL_15MINUTE):
@@ -458,18 +592,145 @@ class Client(object):
             params["startTime"] += timeframe
            
     def get_avg_price(self, **params):
+        """Current average price for a symbol
+        :params: {
+            "symbol": str
+        }
+        :returns: dict -> {
+            "mins": int,
+            "price": str
+        }
+        """
         return self._get("avgPrice", data=params)
     
     def get_ticker(self, **params):
+        """24h rolling window price change statistics. Careful when accessing this with no symbol
+        :params: {
+            "symbol": str   #Optional
+        }
+        :returns: (When symbol sent): dict -> {     #When no symbol sent return lst of dict
+            "symbol": str,
+            "priceChange": str,
+            "priceChangePercent": str,
+            "weightedAvgPrice": str,
+            "prevClosePrice": str,
+            "lastPrice": str,
+            "lastQty": str,
+            "bidPrice": str,
+            "askPrice": str,
+            "openPrice": str,
+            "highPrice": str,
+            "lowPrice": str,
+            "volume": str,
+            "quoteVolume": str,
+            "openTime": int,
+            "closeTime": int,
+            "firstId": int,
+            "lastId": int,
+            "count": int
+        }
+        """
         return self._get("ticker/24hr", data=params)
     
     def get_symbol_ticker(self, **params):
+        """Latest price for a symbol or symbols
+        :params: {
+            "symbol": str   #Optional
+        }
+        :returns: (When symbol sent) -> dict -> {       #When no symbol sent return lst of dict
+            "symbol": str,
+            "price": str
+        }
+        """
         return self._get("ticker/price", data=params)
 
     def get_orderbook_ticker(self, **params):
+        """Best price/qty on the order book for a symbol or symbols
+        :params: {
+            "symbol": str   #Optional
+        }
+        :returns: (When symbol sent) -> dict -> {       #When no symbol sent return lst of dict
+            "symbol": str,
+            "bidPrice": str,
+            "bidQty": str,
+            "askPrice": str,
+            "askQty": str
+        }
+        """
         return self._get("ticker/bookTicker", data=params)
 
     def create_order(self, **params):
+        """Send in a new order
+        :params: {
+            "symbol": str,
+            "side": enum,
+            "type": enum,
+            "timeInForce": enum,            #Optional
+            "quantity": decimal,            #Optional
+            "quoteOrderQty": decimal,       #Optional
+            "price": decimal,               #Optional
+            "newClientOrderId": str,        #Optional   #unique id open orders - automatically generated if not sent - Same newClientOrderId can be accepted only when the previous one is filled, otherwise rejected
+            "stopPrice": decimal,           #Optional
+            "icebergQty": decimal,          #Optional   #When icebergQty sent timeInForce set to GTC
+            "newOrderRespType": enum,       #Optional   #Set response - MARKET and LIMIT Default: FULL other Default: ACK
+            "recvWindow": long,             #Optional   #Max: 60000
+            "timestamp": long
+        }
+
+        Additional mandatory parameters based on type:
+        LIMIT:              timeInForce - quantity - price
+        MARKET:             quantity or quoteOrderQty
+        STOP_LOSS:          quantity - stopPrice
+        STOP_LOSS_LIMIT:    timeInForce - quantity - price - stopPrice
+        TAKE_PROFIT:        quantity - stopPrice
+        TAKE_PROFIT_LIMIT:  timeInForce - quantity - price - stopPrice
+        LIMIT_MAKER:        quantity - price
+
+        :returns:
+        (newOrderRespType = ACK) -> dict -> {
+            "symbol": str,
+            "orderId": int,
+            "orderListId": int, #Unless OCO, value will be -1
+            "clientOrderId": str,
+            "transactTime": int
+        }
+        (newOrderRespType = RESULT) -> dict -> {
+            "symbol": str,
+            "orderId": int,
+            "orderListId": int, #Unless OCO, value will be -1
+            "clientOrderId": str,
+            "transactTime": int,
+            "price": str,
+            "origQty": str,
+            "executedQty": str,
+            "cummulativeQuoteQty": str,
+            "status": str,
+            "timeInForce": str,
+            "type": str,
+            "side": str
+        }
+        (newOrderRespType = FULL) -> dict -> {
+            "symbol": str,
+            "orderId": int,
+            "orderListId": int, #Unless OCO, value will be -1
+            "clientOrderId": str,
+            "transactTime": int,
+            "price": str,
+            "origQty": str,
+            "executedQty": str,
+            "cummulativeQuoteQty": str,
+            "status": str,
+            "timeInForce": str,
+            "type": str,
+            "side": str,
+            "fills": lst -> [dict -> {
+                "price": str,
+                "qty": str,
+                "commission": str,
+                "commissionAsset": str
+            }]
+        }
+        """
         return self._post("order", True, data=params)
 
     def order_limit(self, timeInForce=TIME_IN_FORCE_GTC, **params):

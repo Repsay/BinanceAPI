@@ -7,7 +7,16 @@ from talib import abstract
 from talib import MA_Type
 import talib as tb
 
-from .exceptions import UnknownMATypeException
+from .exceptions import UnknownMATypeException, UnknownSymbolException
+
+def get_pair_info(Client, symbol):
+    result = Client.get_exchange_info()
+
+    for item in result["symbols"]:
+        if item["symbol"] == symbol.upper():
+            return item
+    
+    raise UnknownSymbolException(symbol.upper())
 
 def get_all_symbols(Client):
     #get all symbols from the exchange

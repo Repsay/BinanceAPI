@@ -85,7 +85,15 @@ class WithdrawException(Exception):
 class UnknownMATypeException(Exception):
 
     def __init__(self):
-        message = "Unknown MA type"
+        self.message = "Unknown MA type"
     
     def __str__(self):
         return "UnknownMATypeException: {}".format(self.message)
+
+class UnknownSymbolException(Exception):
+    
+    def __init__(self, value):
+        self.message = f"Unknown symbol {value}"
+    
+    def __str__(self):
+        return f"UnknownSymbolException: {self.message}"
