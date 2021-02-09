@@ -81,3 +81,11 @@ class WithdrawException(Exception):
 
     def __str__(self):
         return "WithdrawException: {}".format(self.message)
+
+class UnknownMATypeException(Exception):
+
+    def __init__(self):
+        message = "Unknown MA type"
+    
+    def __str__(self):
+        return "UnknownMATypeException: {}".format(self.message)
