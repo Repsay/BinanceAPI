@@ -1,7 +1,7 @@
 import pyarrow.feather as feather
 import pandas as pd
 import numpy as np
-import os
+import os, math
 
 from talib import abstract
 from talib import MA_Type
@@ -151,18 +151,29 @@ def updateEMA(Client, symbol, emas, interval):
                     df_add = df_cdl.loc[df_cdl["OpenTime"] > ema_lastDate["OpenTime"], ["OpenTime", "ClosePrice"]]
 
                     if not df_add.empty:
+                        new_lst = []
                         for num in emas:
                             name = f"EMA{num}"
                             prevMA = ema_lastDate[name]
-                            temp_lst = []
+                            
+                            if not math.isnan(prevMA):
+                                temp_lst = []
 
-                            for close in df_add["ClosePrice"]:
-                                prevMA = close * (2/(num+1)) + prevMA * (1 - (2/(num+1)))
-                                temp_lst.append(prevMA)
+                                for close in df_add["ClosePrice"]:
+                                    prevMA = close * (2/(num+1)) + prevMA * (1 - (2/(num+1)))
+                                    temp_lst.append(prevMA)
 
-                            df_add[name] = temp_lst
+                                df_add[name] = temp_lst
+                            else:
+                                df_ema2 = df_cdl.loc[:,["OpenTime", "ClosePrice"]]
+
+                                new_lst.append((name, abstract.EMA(df_ema2["ClosePrice"], timeperiod=num)))
 
                         df_ema = df_ema.append(df_add, ignore_index=True)
+
+                        for name, value in new_lst:
+                            df_ema[name] = value
+
                         feather.write_feather(df_ema, fn2)
             
             if First:
