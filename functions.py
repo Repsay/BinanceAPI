@@ -9,6 +9,10 @@ import talib as tb
 
 from .exceptions import UnknownMATypeException, UnknownSymbolException
 
+def update():
+    print("Test")
+    return none
+
 def get_pair_info(Client, symbol):
     result = Client.get_exchange_info()
 
